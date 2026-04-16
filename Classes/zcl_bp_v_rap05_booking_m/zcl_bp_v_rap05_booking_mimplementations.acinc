@@ -1,0 +1,105 @@
+CLASS lhc_zv_rap05_booking_m DEFINITION INHERITING FROM cl_abap_behavior_handler.
+
+  PRIVATE SECTION.
+
+    METHODS earlynumbering_cba_Bookspl FOR NUMBERING
+      IMPORTING entities FOR CREATE zv_rap05_booking_m\_Bookspl.
+    METHODS get_instance_features FOR INSTANCE FEATURES
+      IMPORTING keys REQUEST requested_features FOR ZV_RAP05_BOOKING_M RESULT result.
+    METHODS validatecode FOR VALIDATE ON SAVE
+      IMPORTING keys FOR zv_rap05_booking_m~validatecode.
+
+    METHODS validateconnection FOR VALIDATE ON SAVE
+      IMPORTING keys FOR zv_rap05_booking_m~validateconnection.
+
+    METHODS validatecustomer FOR VALIDATE ON SAVE
+      IMPORTING keys FOR zv_rap05_booking_m~validatecustomer.
+
+    METHODS validateprice FOR VALIDATE ON SAVE
+      IMPORTING keys FOR zv_rap05_booking_m~validateprice.
+
+    METHODS validatestatus FOR VALIDATE ON SAVE
+      IMPORTING keys FOR zv_rap05_booking_m~validatestatus.
+
+ENDCLASS.
+
+CLASS lhc_zv_rap05_booking_m IMPLEMENTATION.
+
+  METHOD earlynumbering_cba_Bookspl.
+
+    DATA lv_max_booking_spl TYPE /dmo/booking_supplement_id.
+    READ ENTITIES OF zv_rap05_travel_root_m IN LOCAL MODE
+    ENTITY zv_rap05_booking_m BY \_Bookspl
+    FROM CORRESPONDING #( entities )
+    LINK DATA(lt_link_data).
+
+    LOOP AT entities ASSIGNING FIELD-SYMBOL(<ls_entity>) GROUP BY <ls_entity>-%tky.
+
+      "This Will Bring the old Data--> Gets the Max Value in it
+      lv_max_booking_spl = REDUCE #( INIT lv_max = CONV /dmo/booking_supplement_id( '0' )
+                                 FOR ls_link IN lt_link_data USING KEY entity
+                                    WHERE ( source-TravelId = <ls_entity>-TravelId AND
+                                            source-BookingId = <ls_entity>-BookingId )
+                                 NEXT lv_max =
+                                        COND /dmo/booking_supplement_id( WHEN lv_max < ls_link-target-BookingSupplementId
+                                                                         THEN ls_link-target-BookingSupplementId
+                                                                         ELSE lv_max
+                                                                         )
+                                ).
+      "This will Bring the Current Data, which have the Max Value.
+      "In our Scenario the Booking ID would be Empty,
+      "But at Draft, it will contain values. So Re Read the Max value of Latest.
+      lv_max_booking_spl = REDUCE #( INIT lv_max = lv_max_booking_spl
+                                 FOR ls_entity IN entities USING KEY entity
+                                     WHERE ( TravelId = <ls_entity>-TravelId )
+                                 FOR ls_booking IN ls_entity-%target
+                                 NEXT lv_max =
+                                 COND /dmo/booking_supplement_id( WHEN lv_max < ls_booking-BookingSupplementId
+                                                                          THEN ls_booking-BookingSupplementId
+                                                                          ELSE lv_max
+                                                                          )
+                                 ).
+      "Now Since We have the Max Value Lets perform the Insert of New Booking ID
+      LOOP AT entities ASSIGNING FIELD-SYMBOL(<ls_new_entity>)
+             USING KEY entity
+             WHERE TravelId = <ls_entity>-TravelId AND
+             BookingId = <ls_entity>-BookingId.
+
+        LOOP AT <ls_new_entity>-%target ASSIGNING FIELD-SYMBOL(<ls_bookingspl_target>).
+          APPEND CORRESPONDING #( <ls_bookingspl_target> ) TO mapped-zv_rap05_bookspl_m ASSIGNING FIELD-SYMBOL(<ls_new_bookingspl>).
+          IF  <ls_bookingspl_target>-BookingSupplementId IS INITIAL.
+            lv_max_booking_spl += 10.
+            <ls_new_bookingspl>-BookingSupplementId = lv_max_booking_spl.
+          ENDIF.
+        ENDLOOP.
+
+      ENDLOOP.
+
+    ENDLOOP.
+
+  ENDMETHOD.
+
+  METHOD get_instance_features.
+
+  ENDMETHOD.
+
+  METHOD validateCode.
+  ENDMETHOD.
+
+  METHOD validateConnection.
+  ENDMETHOD.
+
+  METHOD validateCustomer.
+  ENDMETHOD.
+
+  METHOD validatePrice.
+  ENDMETHOD.
+
+  METHOD validateStatus.
+  ENDMETHOD.
+
+ENDCLASS.
+
+*"* use this source file for the definition and implementation of
+*"* local helper classes, interface definitions and type
+*"* declarations
