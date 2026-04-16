@@ -1,0 +1,5 @@
+@EndUserText.label: 'RAP Service'
+define service ZV_RAP_SERVICE01 {
+  expose ZV_RAP01;
+  expose ZV_RAP02_FLIGHT_R;
+}

@@ -1,0 +1,34 @@
+class ZC_PRACT1 definition
+  public
+  create public .
+
+public section.
+
+  interfaces IF_OO_ADT_CLASSRUN .
+
+  methods CHAPTER1 .
+protected section.
+private section.
+ENDCLASS.
+
+
+
+CLASS ZC_PRACT1 IMPLEMENTATION.
+
+
+  method CHAPTER1.
+
+*data: o_c1 TYPE REF TO IF_OO_ADT_CLASSRUN_OUT.
+
+
+
+
+  endmethod.
+
+
+  method IF_OO_ADT_CLASSRUN~MAIN.
+
+    out->write( 'Hello World!' ).
+
+  endmethod.
+ENDCLASS.

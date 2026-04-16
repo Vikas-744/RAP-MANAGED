@@ -1,0 +1,449 @@
+CLASS lhc_ZV_RAP05_TRAVEL_ROOT_M DEFINITION INHERITING FROM cl_abap_behavior_handler.
+  PRIVATE SECTION.
+
+    METHODS get_instance_authorizations FOR INSTANCE AUTHORIZATION
+      IMPORTING keys
+                  REQUEST requested_authorizations
+                  FOR travel_data
+      RESULT    result.
+    METHODS accepttravel FOR MODIFY
+      IMPORTING keys FOR ACTION travel_data~accepttravel RESULT result.
+
+    METHODS copytravel FOR MODIFY
+      IMPORTING keys FOR ACTION travel_data~copytravel.
+
+    METHODS recalctot FOR MODIFY
+      IMPORTING keys FOR ACTION travel_data~recalctot.
+
+    METHODS rejecttravel FOR MODIFY
+      IMPORTING keys FOR ACTION travel_data~rejecttravel RESULT result.
+
+    METHODS get_instance_features FOR INSTANCE FEATURES
+      IMPORTING keys REQUEST requested_features FOR travel_data RESULT result.
+    METHODS validateagency FOR VALIDATE ON SAVE
+      IMPORTING keys FOR travel_data~validateagency.
+
+    METHODS validatecode FOR VALIDATE ON SAVE
+      IMPORTING keys FOR travel_data~validatecode.
+
+    METHODS validatecustomer FOR VALIDATE ON SAVE
+      IMPORTING keys FOR travel_data~validatecustomer.
+
+    METHODS validatedates FOR VALIDATE ON SAVE
+      IMPORTING keys FOR travel_data~validatedates.
+
+    METHODS validatestatus FOR VALIDATE ON SAVE
+      IMPORTING keys FOR travel_data~validatestatus.
+
+    METHODS earlynumbering_cba_booking FOR NUMBERING
+      IMPORTING entities FOR CREATE travel_data\_booking.
+
+    METHODS earlynumbering_create FOR NUMBERING
+      IMPORTING entities FOR CREATE travel_data.
+
+ENDCLASS.
+
+CLASS lhc_ZV_RAP05_TRAVEL_ROOT_M IMPLEMENTATION.
+
+  METHOD get_instance_authorizations.
+  ENDMETHOD.
+
+  METHOD earlynumbering_create.
+
+    DATA(lt_entities) = entities.
+    DELETE lt_entities WHERE TravelId IS NOT INITIAL.
+    TRY.
+        cl_numberrange_runtime=>number_get(
+          EXPORTING
+            nr_range_nr       = '01' " Can Check SNRO Number Range Number
+            object            = '/DMO/TRV_M' " SNRO Object Name
+            quantity          = CONV #( lines( lt_entities ) ) "How many We Want?
+          IMPORTING
+            number            = DATA(lv_current) " Can See the Last Value at SNRO
+            returncode        =  DATA(lv_code)
+            returned_quantity =  DATA(lv_count) "How Many Qty we received
+        ).
+      CATCH cx_nr_object_not_found INTO DATA(lo_error).
+
+      CATCH cx_number_ranges.
+    ENDTRY.
+
+    IF lv_count = lines( lt_entities ).
+
+*      mapped-travel_data = VALUE #(
+*          FOR ls_val IN lt_entities
+*          ( %cid = ls_val-%cid
+*            TravelId = REDUCE i( init travelid = lv_current
+*                                 next travelid = sy-tabix )
+*            ) ).
+
+      LOOP AT lt_entities INTO DATA(ls_entity).
+        lv_current = lv_current + 1.
+        APPEND VALUE #( %cid = ls_entity-%cid TravelId = lv_current )
+                TO mapped-travel_data.
+      ENDLOOP.
+
+    ENDIF.
+
+  ENDMETHOD.
+
+  METHOD earlynumbering_cba_Booking.
+    DATA lv_max_booking TYPE /dmo/booking_id.
+    READ ENTITIES OF zv_rap05_travel_root_m IN LOCAL MODE
+    ENTITY travel_data BY \_booking
+    FROM CORRESPONDING #( entities )
+    LINK DATA(lt_link_data).
+
+    LOOP AT entities ASSIGNING FIELD-SYMBOL(<ls_entity>) GROUP BY <ls_entity>-TravelId.
+
+      "This Will Bring the old Data--> Gets the Max Value in it
+      lv_max_booking = REDUCE #( INIT lv_max = CONV /dmo/booking_id( '0' )
+                                 FOR ls_link IN lt_link_data USING KEY entity
+                                    WHERE ( source-TravelId = <ls_entity>-TravelId )
+                                 NEXT lv_max = COND /dmo/booking_id( WHEN lv_max < ls_link-target-TravelId
+                                                                         THEN ls_link-target-BookingId
+                                                                         ELSE lv_max
+                                                                         )
+                                ).
+      "This will Bring the Current Data, which have the Max Value.
+      "In our Scenario the Booking ID would be Empty,
+      "But at Draft, it will contain values. So Re Read the Max value of Latest.
+      lv_max_booking = REDUCE #( INIT lv_max = lv_max_booking
+                                 FOR ls_entity IN entities USING KEY entity
+                                     WHERE ( TravelId = <ls_entity>-TravelId )
+                                 FOR ls_booking IN ls_entity-%target
+                                 NEXT lv_max = COND /dmo/booking_id( WHEN lv_max < ls_booking-BookingId
+                                                                          THEN ls_booking-BookingId
+                                                                          ELSE lv_max
+                                                                          )
+                                 ).
+      "Now Since We have the Max Value Lets perform the Insert of New Booking ID
+      LOOP AT entities ASSIGNING FIELD-SYMBOL(<ls_new_entity>)
+             USING KEY entity
+             WHERE TravelId = <ls_entity>-TravelId.
+
+        LOOP AT <ls_new_entity>-%target ASSIGNING FIELD-SYMBOL(<ls_booking_target>).
+          APPEND CORRESPONDING #( <ls_booking_target> ) TO mapped-zv_rap05_booking_m ASSIGNING FIELD-SYMBOL(<ls_new_booking>).
+          IF  <ls_booking_target>-BookingId IS INITIAL.
+            lv_max_booking += 10.
+            <ls_new_booking>-BookingId = lv_max_booking.
+          ENDIF.
+        ENDLOOP.
+
+      ENDLOOP.
+
+    ENDLOOP.
+
+  ENDMETHOD.
+
+  METHOD acceptTravel.
+
+
+    DATA: lt_travel_r    TYPE TABLE FOR READ IMPORT zv_rap05_travel_root_m,
+          lt_travel_u    TYPE TABLE FOR UPDATE zv_rap05_travel_root_m,
+          lt_travel_res  TYPE TABLE FOR READ RESULT zv_rap05_travel_root_m,
+          lt_booking_r   TYPE TABLE FOR READ IMPORT zv_rap05_booking_m,
+          lt_booking_res TYPE TABLE FOR READ RESULT zv_rap05_booking_m,
+          lt_booking_u   TYPE TABLE FOR UPDATE zv_rap05_booking_m,
+          lt_optab       TYPE abp_behv_retrievals_tab.
+
+
+    lt_travel_r = VALUE #( FOR ls_keys IN keys ( %tky = ls_keys-%tky
+                        %control = VALUE #( OverallStatus = if_abap_behv=>mk-on )
+                        ) )  .
+    lt_booking_r = VALUE #( FOR ls_keys IN keys ( %tky = ls_keys-%tky
+                        %control = VALUE #( BookingId = if_abap_behv=>mk-on
+                                    BookingStatus = if_abap_behv=>mk-on )
+                        ) )  .
+
+    lt_optab = VALUE #(
+                       ( op = if_abap_behv=>op-r-read
+                         entity_name = 'ZV_RAP05_TRAVEL_ROOT_M'
+                         instances   = REF #( lt_travel_r )
+                         results     = REF #( lt_travel_res )
+                       )
+                      ( op = if_abap_behv=>op-r-read_ba
+                         entity_name = 'ZV_RAP05_TRAVEL_ROOT_M'
+                         sub_name = '_BOOKING'
+                         instances   = REF #( lt_booking_r )
+                         results     = REF #( lt_booking_res )
+                       )
+                    ).
+
+    READ ENTITIES
+    OPERATIONS lt_optab
+    FAILED DATA(lt_failed_res).
+
+    lt_travel_u = VALUE #(
+      FOR travel IN lt_travel_res
+        (
+          %key-TravelId  = travel-TravelId
+          overallstatus  = 'A'
+        )
+    ).
+
+    lt_booking_u = VALUE #(
+     FOR <fs_travel> IN lt_travel_res
+       FOR <fs_booking> IN FILTER #( lt_booking_res
+                                     USING KEY entity
+                                     WHERE travelid = <fs_travel>-TravelId )
+         (
+           %key-TravelId  = <fs_booking>-TravelId
+           %key-BookingId = <fs_booking>-BookingId
+           BookingStatus  = 'B'
+         )
+   ).
+
+
+    MODIFY ENTITIES OF zv_rap05_travel_root_m IN LOCAL MODE
+      ENTITY travel_data
+          UPDATE FIELDS ( OverallStatus )
+          WITH lt_travel_u
+      ENTITY zv_rap05_booking_m
+          UPDATE FIELDS ( BookingStatus )
+          WITH lt_booking_u
+     MAPPED DATA(lt_mapped)
+      REPORTED DATA(lt_reported)
+      FAILED DATA(lt_failed).
+
+
+*    MODIFY ENTITIES OF zv_rap05_travel_root_m IN LOCAL MODE
+*      ENTITY travel_data
+*      UPDATE FIELDS ( OverallStatus )
+*      WITH VALUE #( FOR ls_keys IN keys ( %tky = ls_keys-%tky OverallStatus = 'A' ) )
+**      WITH VALUE #( ( %key-TravelId = keys[ 1 ]-travelid OverallStatus = 'A' ) )
+*      MAPPED DATA(lt_mapped)
+*      REPORTED DATA(lt_reported)
+*      FAILED DATA(lt_failed).
+*
+    READ ENTITIES OF zv_rap05_travel_root_m IN LOCAL MODE
+     ENTITY travel_data
+     ALL FIELDS WITH CORRESPONDING #( keys )
+     RESULT DATA(lt_result).
+
+
+    result = VALUE #( FOR ls_result IN lt_result
+                        ( %tky = ls_result-%tky
+                          %param = CORRESPONDING #( ls_result ) )
+                     ).
+
+  ENDMETHOD.
+
+  METHOD copyTravel.
+
+    DATA: lt_travel_c   TYPE TABLE FOR CREATE zv_rap05_travel_root_m,
+          lt_booking_c  TYPE TABLE FOR CREATE zv_rap05_travel_root_m\_booking,
+          lt_book_spl_c TYPE TABLE FOR CREATE zv_rap05_booking_m\_Bookspl.
+
+    READ ENTITIES OF  zv_rap05_travel_root_m IN LOCAL MODE
+    ENTITY travel_data
+    ALL FIELDS WITH CORRESPONDING #( keys )
+    RESULT DATA(lt_travel_res)
+    FAILED DATA(lt_failed_res).
+
+    READ ENTITIES OF zv_rap05_travel_root_m IN LOCAL MODE
+    ENTITY travel_data BY \_booking
+    ALL FIELDS WITH CORRESPONDING #( lt_travel_res )
+    RESULT DATA(lt_booking_res).
+
+    READ ENTITIES OF zv_rap05_travel_root_m IN LOCAL MODE
+    ENTITY zv_rap05_booking_m BY \_Bookspl
+    ALL FIELDS WITH CORRESPONDING #( lt_booking_res )
+    RESULT DATA(lt_book_spl_res).
+
+    "Copy of Data From Selected Instance to New Created Internal Tables
+    LOOP AT lt_travel_res ASSIGNING FIELD-SYMBOL(<ls_travel_res>).
+      " Prepared Data for Travel
+      APPEND VALUE #( %cid = keys[ KEY entity TravelId = <ls_travel_res>-TravelId ]-%cid
+                      %data = CORRESPONDING #( <ls_travel_res> EXCEPT TravelId )
+                     )
+      TO lt_travel_c ASSIGNING FIELD-SYMBOL(<ls_travel_c>).
+      <ls_travel_c>-BeginDate = cl_abap_context_info=>get_system_date(  ).
+      <ls_travel_c>-EndDate = cl_abap_context_info=>get_system_date(  ) + 30.
+      <ls_travel_c>-OverallStatus = 'O'.
+
+      "Preparing the Data for Booking ID
+      APPEND VALUE #( %cid_ref = <ls_travel_c>-%cid )
+      TO lt_booking_c ASSIGNING FIELD-SYMBOL(<ls_booking_c>).
+      LOOP AT lt_booking_res ASSIGNING FIELD-SYMBOL(<ls_booking_res>)
+                    USING KEY entity
+                    WHERE TravelId = <ls_travel_res>-TravelId.
+
+        APPEND VALUE #( %cid =  <ls_travel_c>-%cid && <ls_booking_res>-BookingId
+                         %data = CORRESPONDING #( <ls_booking_res> EXCEPT TravelId )
+                        ) TO <ls_booking_c>-%target ASSIGNING FIELD-SYMBOL(<ls_booking>).
+        <ls_booking>-BookingStatus = 'N'.
+
+        "Preparing the Data for Booking Supplement
+        APPEND VALUE #( %cid_ref = <ls_booking>-%cid )
+        TO lt_book_spl_c ASSIGNING FIELD-SYMBOL(<ls_book_spl_c>).
+
+        LOOP AT lt_book_spl_res ASSIGNING FIELD-SYMBOL(<ls_book_spl_res>)
+                                 USING KEY entity
+                                 WHERE TravelId = <ls_travel_res>-TravelId
+                                 AND BookingId = <ls_booking_res>-BookingId.
+
+          APPEND VALUE #( %cid = <ls_travel_c>-%cid && <ls_booking_res>-BookingId && <ls_book_spl_res>-BookingSupplementId
+                          %data = CORRESPONDING #( <ls_book_spl_res> EXCEPT TravelId BookingId )
+                          ) TO <ls_book_spl_c>-%target.
+
+        ENDLOOP.
+
+      ENDLOOP.
+
+    ENDLOOP.
+
+    MODIFY ENTITIES OF zv_rap05_travel_root_m IN LOCAL MODE
+    ENTITY Travel_Data
+    CREATE FIELDS ( agencyid CustomerId begindate
+     enddate      bookingfee   totalprice   currencycode description   overallstatus )
+     WITH lt_travel_c
+    ENTITY Travel_Data
+    CREATE BY \_booking
+    FIELDS ( BookingId BookingDate CustomerId CarrierId ConnectionId FlightDate FlightPrice CurrencyCode BookingStatus )
+    WITH lt_booking_c
+    ENTITY zv_rap05_booking_m
+    CREATE BY \_Bookspl
+    FIELDS ( BookingSupplementId SupplementId Price  CurrencyCode )
+    WITH lt_book_spl_c
+    MAPPED DATA(lt_mapped)
+    FAILED DATA(lt_failed).
+
+    IF lt_failed IS INITIAL.
+      mapped-travel_data = lt_mapped-travel_data.
+    ENDIF.
+
+  ENDMETHOD.
+
+  METHOD reCalcTot.
+
+  ENDMETHOD.
+
+  METHOD rejectTravel.
+    MODIFY ENTITIES OF zv_rap05_travel_root_m IN LOCAL MODE
+       ENTITY travel_data
+       UPDATE FIELDS ( OverallStatus )
+       WITH VALUE #( ( %key-TravelId = keys[ 1 ]-travelid OverallStatus = 'X' ) )
+       ENTITY zv_rap05_booking_m
+       UPDATE FIELDS ( BookingStatus )
+          WITH VALUE #(
+            ( %key-TravelId = keys[ 1 ]-travelid
+              BookingStatus = 'X'
+            )
+          )
+       MAPPED DATA(lt_mapped)
+       REPORTED DATA(lt_reported)
+       FAILED DATA(lt_failed).
+
+    READ ENTITIES OF zv_rap05_travel_root_m IN LOCAL MODE
+    ENTITY travel_data
+    ALL FIELDS
+    WITH VALUE #( ( %tky-TravelId = keys[ 1 ]-TravelId ) )
+    RESULT DATA(lt_result).
+
+
+    result = VALUE #( FOR ls_result IN lt_result
+                        ( %tky = ls_result-%tky
+                          %param = CORRESPONDING #( ls_result ) )
+                     ).
+
+  ENDMETHOD.
+
+  METHOD get_instance_features.
+
+    READ ENTITIES OF zv_rap05_travel_root_m IN LOCAL MODE
+    ENTITY travel_data
+    FIELDS ( TravelId OverallStatus )
+    WITH CORRESPONDING #( keys )
+    RESULT DATA(lt_travel_res).
+
+    result = VALUE #( FOR ls_travel IN lt_travel_res
+                        ( %tky = ls_travel-%tky
+                           %features-%action-acceptTravel =
+                                               COND #( WHEN ls_travel-OverallStatus EQ 'A'
+                                                        THEN if_abap_behv=>fc-o-disabled
+                                                        ELSE if_abap_behv=>fc-o-enabled
+                                                )
+                           %features-%action-rejectTravel =
+                                               COND #( WHEN ls_travel-OverallStatus EQ 'X'
+                                                        THEN if_abap_behv=>fc-o-disabled
+                                                        ELSE if_abap_behv=>fc-o-enabled
+                                                )
+                            %features-%assoc-_booking =
+                                               COND #( WHEN ls_travel-OverallStatus EQ 'X'
+                                                        THEN if_abap_behv=>fc-o-disabled
+                                                        ELSE if_abap_behv=>fc-o-enabled
+                                                )
+                            )
+                     ).
+
+
+
+  ENDMETHOD.
+
+  METHOD validateAgency.
+  ENDMETHOD.
+
+  METHOD validateCode.
+  ENDMETHOD.
+
+  METHOD validateCustomer.
+
+    "Read the Key Values
+    READ ENTITY IN LOCAL MODE zv_rap05_travel_root_m
+    FIELDS ( customerid )
+    WITH CORRESPONDING #( keys )
+    RESULT DATA(lt_travel_res).
+
+    DATA lt_customer TYPE SORTED TABLE OF /dmo/customer WITH UNIQUE KEY Customer_Id.
+
+    lt_customer = CORRESPONDING #( lt_travel_res DISCARDING DUPLICATES MAPPING customer_id = CustomerId ).
+
+    DELETE lt_customer WHERE customer_id IS INITIAL.
+
+    " Perform the Query based on Key Values recieved
+    SELECT
+        FROM /dmo/customer
+        FIELDS customer_id
+        FOR ALL ENTRIES IN @lt_customer
+        WHERE customer_id = @lt_customer-customer_id
+        INTO TABLE @DATA(lt_cust).
+    IF sy-subrc NE 0.
+      " Do a Loop over and validate if key is valid , else initial or invalid-raise error
+      LOOP AT lt_travel_res ASSIGNING FIELD-SYMBOL(<ls_travel_res>).
+        IF <ls_travel_res>-CustomerId IS INITIAL
+                    OR NOT line_exists( lt_cust[ customer_id = <ls_travel_res>-CustomerId ] ).
+          APPEND VALUE #( %tky = <ls_travel_res>-%tky )
+                      TO failed-travel_data.
+
+
+          APPEND VALUE #( %tky = <ls_travel_res>-%tky
+                          %msg = NEW /dmo/cm_flight_messages(
+                                                             textid = /dmo/cm_flight_messages=>customer_unkown
+                                                             customer_id = <ls_travel_res>-CustomerId
+                                                             severity = if_abap_behv_message=>severity-error
+                                                              )
+                            %element-customerid = if_abap_behv=>mk-on
+                   ) TO reported-travel_data.
+
+        ENDIF.
+
+      ENDLOOP.
+
+    ENDIF.
+
+  ENDMETHOD.
+
+  METHOD validateDates.
+
+  "Travel data < Current Date or Start Date < End Date
+
+
+  ENDMETHOD.
+
+  METHOD validateStatus.
+  "other Than OXA Raise the Error.
+
+  ENDMETHOD.
+
+ENDCLASS.

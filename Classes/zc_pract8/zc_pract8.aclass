@@ -1,0 +1,15 @@
+class ZC_PRACT8 definition
+  public
+  abstract
+  final
+  for behavior of ZC_CDS4_R .
+
+public section.
+protected section.
+private section.
+ENDCLASS.
+
+
+
+CLASS ZC_PRACT8 IMPLEMENTATION.
+ENDCLASS.

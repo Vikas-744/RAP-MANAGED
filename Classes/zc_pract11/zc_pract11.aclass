@@ -1,0 +1,99 @@
+CLASS zc_pract11 DEFINITION
+  PUBLIC
+  FINAL
+  CREATE PUBLIC .
+
+  PUBLIC SECTION.
+    INTERFACES if_oo_adt_classrun.
+
+  PROTECTED SECTION.
+
+  PRIVATE SECTION.
+
+ENDCLASS.
+
+
+
+CLASS zc_pract11 IMPLEMENTATION.
+
+  METHOD if_oo_adt_classrun~main.
+
+*    DATA: lt_booking TYPE TABLE FOR CREATE zv_rap05_travel_root_m\_booking.
+*
+*    MODIFY ENTITY zv_rap05_travel_root_m
+*    CREATE FROM VALUE #(
+*                            ( %cid = 'cid1'
+*                              %data-BeginDate = '20250405'
+*                              %control-begindate = if_abap_behv=>mk-on
+*                            )
+*                        )
+*
+*    CREATE BY \_booking FROM VALUE #(
+*                                    ( %cid_ref = 'cid1'
+*                                        %target = value #( ( %cid = 'cid11'
+*                                                            bookingdate = '20250405'
+*                                                            %control-bookingdate = if_abap_behv=>mk-on
+*                                                         ) )
+*                                    )
+*                                )
+*                        FAILED FINAL(lt_failed)
+*                        MAPPED FINAL(lt_mapped)
+*                        REPORTED FINAL(lt_reported)
+*                        .
+
+    DATA : it_optab       TYPE abp_behv_changes_tab,
+           it_travel      TYPE TABLE FOR CREATE zv_rap05_travel_root_m,
+           it_travel_res  TYPE TABLE FOR READ RESULT zv_rap05_travel_root_m,
+           it_booking     TYPE TABLE FOR CREATE zv_rap05_travel_root_m\_booking,
+           it_booking_res TYPE TABLE FOR READ RESULT zv_rap05_booking_m.
+    "Here Preparing the input which is required for travel root
+    it_travel = VALUE #(
+                             ( %cid = 'cid1'
+                              %data-BeginDate = '20250405'
+                              %control-begindate = if_abap_behv=>mk-on
+                            ) )   .
+    "Here it is preparing the input for Booking(Child Entity )
+    it_booking = VALUE #(
+                             ( %cid_ref = 'cid1'
+                               %target = VALUE #( ( %cid = 'cid11'
+                                                   bookingdate = '20250405'
+                                                   %control-bookingdate = if_abap_behv=>mk-on
+                                                ) )
+                                    )     ).
+    "The operations tab which will collect input and brings the result set
+    it_optab = VALUE #(
+                           ( op = if_abap_behv=>op-m-create
+                             entity_name = 'ZV_RAP05_TRAVEL_ROOT_M'
+                             instances = REF #( it_travel )
+                             results = REF #( it_travel_res )
+                           )
+                           ( op = if_abap_behv=>op-m-create_ba
+                             entity_name = 'ZV_RAP05_TRAVEL_ROOT_M'
+                             sub_name = '_BOOKING'
+                             instances = REF #( it_booking )
+                             results = REF #( it_booking_res )
+                           )
+    ).
+
+    MODIFY ENTITIES OPERATIONS it_optab
+    FAILED DATA(lt_failed)
+    REPORTED data(lt_reported)
+    mapped data(lt_mapped)
+    .
+
+    COMMIT ENTITIES
+        RESPONSE OF zv_rap05_travel_root_m
+        FAILED DATA(failed_commit)
+        REPORTED DATA(reported_commit).
+
+    IF lt_failed IS NOT INITIAL.
+      out->write( lt_failed ).
+    ELSEIF lt_mapped IS NOT INITIAL.
+      out->write( lt_mapped ). out->write( it_travel_res ).
+    ELSEIF lt_reported IS NOT INITIAL.
+      out->write( lt_reported ).
+    ENDIF.
+
+  ENDMETHOD.
+
+ENDCLASS.

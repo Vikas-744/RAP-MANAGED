@@ -1,0 +1,31 @@
+CLASS zc_pract9 DEFINITION
+  PUBLIC
+  FINAL
+  CREATE PUBLIC .
+  PUBLIC SECTION.
+    INTERFACES: if_oo_adt_classrun.
+  PROTECTED SECTION.
+  PRIVATE SECTION.
+ENDCLASS.
+
+
+
+CLASS zc_pract9 IMPLEMENTATION.
+
+  METHOD if_oo_adt_classrun~main.
+    TRY.
+        INSERT zvt_rap05_trvl_m FROM ( SELECT * FROM /dmo/travel_m ).
+        INSERT zvt_rap05_book_M FROM ( SELECT * FROM /dmo/booking_m ).
+        INSERT zvt_rap05_bksplm FROM ( SELECT * FROM /dmo/booksuppl_M ).
+        IF sy-subrc EQ 0.
+          COMMIT WORK.
+          out->write( 'Successfull' ).
+        ELSE.
+          out->write( 'Un-Successfull' ).
+        ENDIF.
+      CATCH cx_root INTO DATA(lo_ex).
+        out->write( lo_ex->get_longtext( ) ).
+    ENDTRY.
+  ENDMETHOD.
+
+ENDCLASS.

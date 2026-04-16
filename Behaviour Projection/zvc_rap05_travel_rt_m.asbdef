@@ -1,0 +1,36 @@
+projection;
+strict ( 2 );
+
+
+define behavior for ZVC_RAP05_TRAVEL_RT_M //alias <alias_name>
+use etag
+{
+  use create;
+  use update;
+  use delete;
+  use action copyTravel;
+  use action acceptTravel;
+  use action rejectTravel;
+
+  use association _booking { create; }
+}
+
+define behavior for ZVC_RAP05_BOOKING_M //alias <alias_name>
+use etag
+{
+  use update;
+  use delete;
+
+  use association _Travel;
+  use association _Bookspl { create; }
+}
+
+define behavior for ZVC_RAP05_BOOKSPL_M //alias <alias_name>
+use etag
+{
+  use update;
+  use delete;
+
+  use association _Travel;
+  use association _Booking;
+}

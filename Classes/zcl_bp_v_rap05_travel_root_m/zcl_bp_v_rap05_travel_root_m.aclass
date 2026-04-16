@@ -1,0 +1,5 @@
+CLASS zcl_bp_v_rap05_travel_root_m DEFINITION PUBLIC ABSTRACT FINAL FOR BEHAVIOR OF zv_rap05_travel_root_m.
+ENDCLASS.
+
+CLASS zcl_bp_v_rap05_travel_root_m IMPLEMENTATION.
+ENDCLASS.

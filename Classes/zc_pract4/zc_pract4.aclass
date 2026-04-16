@@ -1,0 +1,58 @@
+CLASS zc_pract4 DEFINITION
+  PUBLIC
+  FINAL
+  CREATE PUBLIC .
+
+  PUBLIC SECTION.
+
+    INTERFACES if_oo_adt_classrun .
+  PROTECTED SECTION.
+  PRIVATE SECTION.
+ENDCLASS.
+
+
+
+CLASS zc_pract4 IMPLEMENTATION.
+
+
+  METHOD if_oo_adt_classrun~main.
+
+    DATA connection TYPE REF TO lcl_connection.
+    DATA connections TYPE TABLE OF REF TO lcl_connection.
+
+
+    connection = NEW #(  ).
+
+    connection->carrier_id    = 'LH'.
+    connection->connection_id = '0400'.
+    connection->conn_counter = 121.
+
+
+    APPEND connection TO connections.
+
+    connection = NEW #(  ).
+
+    connection->carrier_id    = 'AA'.
+    connection->connection_id = '0017'.
+    lcl_connection=>conn_counter = 1234.
+    APPEND connection TO connections.
+
+    connection = NEW #(  ).
+
+    connection->carrier_id    = 'SQ'.
+    connection->connection_id = '0001'.
+    connection->conn_counter = 145.
+
+    APPEND connection TO connections.
+
+    LOOP AT connections INTO data(o_ref).
+      out->write(  '_________________'  ).
+      out->write( data = O_ref->carrier_id  name = 'Carrier ID'  ).
+      out->write( data = O_ref->connection_id  name = 'Connection ID'  ).
+      out->write( data = O_ref->conn_counter  name = 'Counter'  ).
+
+    ENDLOOP.
+
+
+  ENDMETHOD.
+ENDCLASS.

@@ -1,0 +1,6 @@
+@EndUserText.label: 'Service for Managed Application'
+define service ZV_RAP05_SERVICE02 {
+  expose ZVC_RAP05_TRAVEL_RT_M;
+  expose ZVC_RAP05_BOOKING_M;
+  expose ZVC_RAP05_BOOKSPL_M;
+}

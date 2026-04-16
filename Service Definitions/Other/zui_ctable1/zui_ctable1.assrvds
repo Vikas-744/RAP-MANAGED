@@ -1,0 +1,4 @@
+@EndUserText.label: 'Service definition for ZC_CTABLE1'
+define service ZUI_CTABLE1 {
+  expose ZC_CTABLE1 as R_TABLE;
+}
